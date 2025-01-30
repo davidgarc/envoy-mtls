@@ -1,3 +1,8 @@
+#!/bin/bash
+
+mkdir -p certs
+cd certs
+
 # Generate the CA key and certificate
 openssl genpkey -algorithm RSA -out ca.key
 openssl req -new -x509 -key ca.key -out ca.crt -subj "/CN=MyCA"

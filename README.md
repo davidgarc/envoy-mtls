@@ -45,7 +45,7 @@ This will start:
 ### 3. **Test the Setup**
 
 look at the logs of client container to see the response headers.
-![Response Headers showing X-OU header with the OU from the client certificate](response-header.png)
+![Response Headers showing X-OU header with the OU from the client certificate](screenshots/response-header.png)
 
 ### 4. **Structure**
 	•	gen-certs.sh: The script to generate the certificates.
