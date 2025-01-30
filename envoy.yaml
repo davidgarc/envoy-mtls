@@ -1,0 +1,81 @@
+static_resources:
+  listeners:
+    - name: main_listener
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 8080
+      filter_chains:
+        - filter_chain_match: {}
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: "/etc/envoy/certs/server.crt"
+                    private_key:
+                      filename: "/etc/envoy/certs/server.key"
+                validation_context:
+                  trusted_ca:
+                    filename: "/etc/envoy/certs/ca.crt"
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                # The order of http_filters is important; the Lua filter is placed
+                # before the router so it can modify headers on the request path.
+                http_filters:
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      inline_code: |
+                        local ou = nil
+
+                        -- on request handler to get the OU from the client certificate
+                        function envoy_on_request(handle)
+                          local ssl_info = handle:connection():ssl()
+                          if ssl_info then
+                            if ssl_info:peerCertificatePresented() then
+                              local subject_dn = ssl_info:subjectPeerCertificate()
+                              if subject_dn ~= nil then
+                                ou = subject_dn:match("OU=([^,]+)")
+                              end
+                            end
+                          end
+                        end
+
+                        -- on response handler to add the OU to the response headers
+                        function envoy_on_response(handle)
+                          if ou then
+                            handle:headers():add("X-OU", ou)
+                          end
+                        end
+                  - name: envoy.filters.http.router
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: local_service
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: upstream_service
+
+  clusters:
+    - name: upstream_service
+      type: STRICT_DNS
+      connect_timeout: 5s
+      load_assignment:
+        cluster_name: upstream_service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: upstream # Replace with your actual upstream hostname or IP
+                      port_value: 80

@@ -1,0 +1,45 @@
+services:
+  envoy.local:
+    image: envoyproxy/envoy:v1.18.3
+    container_name: envoy1
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml
+      - ./certs:/etc/envoy/certs
+    networks:
+      - envoy-net
+
+  upstream:
+    image: nginx:alpine
+    container_name: upstream
+    volumes:
+      - ./upstream:/usr/share/nginx/html
+    networks:
+      - envoy-net
+
+  client:
+    image: curlimages/curl:latest
+    container_name: client
+    command:
+      [
+        "curl",
+        "--verbose",
+        "--cacert",
+        "/etc/ssl/certs/ca.crt",
+        "--cert",
+        "/etc/ssl/certs/client.crt",
+        "--key",
+        "/etc/ssl/certs/client.key",
+        "https://envoy.local:8080",
+      ]
+    volumes:
+      - ./certs:/etc/ssl/certs
+    networks:
+      - envoy-net
+    depends_on:
+      - envoy.local
+      - upstream
+networks:
+  envoy-net:
+    driver: bridge
